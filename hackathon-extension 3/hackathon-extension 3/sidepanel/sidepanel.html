@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="sidepanel.css">
+  <title>Pitho.ai</title>
+</head>
+<body>
+  <div class="sp">
+    <!-- Header -->
+    <div class="sp-header">
+      <div class="sp-brand">
+        <div class="sp-logo-wrap" id="agentLogoBtn" title="Toggle auto-pilot agent">
+          <div class="sp-logo-pulse-ring"></div>
+          <div class="sp-logo-pulse-ring sp-logo-pulse-ring-2"></div>
+          <img class="sp-logo" src="../icons/pitho-logo.png" alt="Pitho.ai">
+        </div>
+        <div class="sp-brand-text">
+          <span class="sp-text-logo">Pitho<span class="sp-text-dot">.ai</span></span>
+          <div class="sp-subtitle" id="spSubtitle"></div>
+        </div>
+      </div>
+      <div class="sp-header-right">
+        <div class="sp-status" id="statusDot"><span class="sp-dot"></span> Ready</div>
+        <button class="sp-header-btn sp-header-crm" id="openCRMBtn" title="Open CRM Dashboard">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </button>
+        <button class="sp-header-btn sp-header-analyze" id="headerAnalyzeBtn" title="Re-analyze page">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        </button>
+        <button class="sp-header-btn sp-header-stop" id="stopBtn" style="display:none" title="Stop generation">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Agent Status Bar (hidden by default) -->
+    <div class="sp-agent-bar" id="agentBar" style="display:none">
+      <div class="sp-agent-sweep"></div>
+      <div class="sp-agent-scanlines"></div>
+      <!-- Status row -->
+      <div class="sp-agent-top">
+        <div class="sp-agent-soldier">
+          <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" fill="none">
+              <circle cx="20" cy="8" r="3.5"/>
+              <path d="M20 11.5v8"/>
+              <path d="M14 16l6-1.5 6 1.5"/>
+              <path d="M14 16l-4 6"/>
+              <path d="M26 16l3-3"/>
+              <path d="M17 19.5l-3 8"/>
+              <path d="M23 19.5l3 8"/>
+              <line x1="10" y1="13" x2="7" y2="11" stroke-width="1.5"/>
+              <line x1="7" y1="11" x2="3" y2="11.5" stroke-width="1.2"/>
+            </g>
+          </svg>
+        </div>
+        <span class="sp-agent-bar-dot"></span>
+        <span class="sp-agent-bar-text" id="agentStatusText">Scanning for prospects...</span>
+      </div>
+      <!-- Tactical HUD -->
+      <div class="sp-agent-hud" id="agentHud">
+        <div class="sp-hud-chip sp-hud-platform" id="hudPlatform">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span class="sp-hud-val" id="hudPlatformVal">---</span>
+        </div>
+        <div class="sp-hud-chip sp-hud-prospect" id="hudProspect">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="3"/><line x1="12" y1="1" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="1" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="23" y2="12"/></svg>
+          <span class="sp-hud-val" id="hudProspectVal">---</span>
+        </div>
+        <div class="sp-hud-chip sp-hud-msgs" id="hudMsgs">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span class="sp-hud-val" id="hudMsgsVal">0</span>
+          <span class="sp-hud-label">msgs</span>
+        </div>
+        <div class="sp-hud-chip sp-hud-rips" id="hudRips">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+          <span class="sp-hud-val" id="hudRipsVal">0</span>
+          <span class="sp-hud-label">rips</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Bar -->
+    <div class="sp-controls" id="controlsBar">
+      <select class="sp-select" id="modeSelect" title="Reply mode">
+        <option value="auto">Auto</option>
+        <option value="objection">Objection</option>
+        <option value="follow_up">Follow Up</option>
+        <option value="close">Close</option>
+        <option value="re_engage">Re-engage</option>
+      </select>
+      <div class="sp-engine-bar" id="engineBar">
+        <button class="sp-engine-btn sp-engine-deep active" data-backend="thinking" title="Deep analysis + dual KB">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2a7 7 0 0 1 7 7c0 3-2 5-3.5 6.5L12 19l-3.5-3.5C7 14 5 12 5 9a7 7 0 0 1 7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+          deeprip
+        </button>
+        <button class="sp-engine-btn sp-engine-quick" data-backend="fast" title="Quick reply pipeline">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          quickrip
+        </button>
+      </div>
+      <div class="sp-controls-spacer"></div>
+      <button class="sp-action-btn sp-action-score" id="btnScore" title="Score conversation">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Score
+      </button>
+      <button class="sp-action-btn sp-action-coach" id="btnCoach" title="Talk to coach">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Coach
+      </button>
+      <button class="sp-action-btn sp-action-metrics" id="btnMetrics" title="Toggle performance metrics">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
+    </div>
+
+    <!-- Reply Mode Content (existing) -->
+    <div class="sp-content" id="content">
+      <div class="sp-empty">
+        <div class="sp-empty-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        <div class="sp-empty-title">Analyzing page...</div>
+        <div class="sp-empty-desc">Scanning the current page for conversations</div>
+      </div>
+    </div>
+
+    <!-- Score Mode Container (hidden by default) -->
+    <div class="sp-score-container" id="scoreContainer" style="display: none;">
+      <!-- Back bar -->
+      <div class="sp-back-bar">
+        <button class="sp-back-btn" id="scoreBackBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+          Reply
+        </button>
+        <span class="sp-back-mode-label">Conversation Score</span>
+      </div>
+      <!-- Context banner -->
+      <div class="sp-chat-context" id="scoreContext"></div>
+
+      <!-- Score body (scrollable) -->
+      <div class="sp-score-body" id="scoreBody">
+        <!-- Loader or results injected by JS -->
+      </div>
+    </div>
+
+    <!-- Chat Mode Container (hidden by default) -->
+    <div class="sp-chat-container" id="chatContainer" style="display: none;">
+      <!-- Back bar -->
+      <div class="sp-back-bar">
+        <button class="sp-back-btn" id="coachBackBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+          Reply
+        </button>
+        <span class="sp-back-mode-label">Coach</span>
+      </div>
+      <!-- Context banner -->
+      <div class="sp-chat-context" id="chatContext"></div>
+
+      <!-- Chat messages -->
+      <div class="sp-chat-messages" id="chatMessages"></div>
+
+      <!-- Chat input -->
+      <div class="sp-chat-input-area">
+        <div class="sp-chat-input-wrap">
+          <textarea id="chatInput" placeholder="Ask about this conversation..." rows="1"></textarea>
+          <button class="sp-chat-send-btn" id="chatSendBtn" title="Send">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="marked.min.js"></script>
+  <script src="purify.min.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

@@ -1,1 +1,8 @@
 .claude/
+alfread-key
+ai-sales-copilot*/
+.env
+*.env
+__pycache__/
+__MACOSX/
+.DS_Store

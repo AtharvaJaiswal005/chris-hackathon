@@ -1,9 +1,9 @@
-// HackExt Extension - Content Script
+// Pitho Extension - Content Script
 
 (function () {
   'use strict';
 
-  console.log('[HackExt] Loaded on', window.location.hostname);
+  console.log('[Pitho] Loaded on', window.location.hostname);
 
   let enabled = true;
   let floatingBtn = null;
@@ -71,12 +71,13 @@
     if (h.includes('instagram.com')) return 'instagram';
     if (h.includes('facebook.com') || h.includes('messenger.com')) return 'facebook';
     if (h.includes('twitter.com') || h.includes('x.com')) return 'x';
+    if (h.includes('sbccrm.com')) return 'revio';
     return 'other';
   }
 
   function getPlatformLabel() {
     const p = detectPlatform();
-    const labels = { linkedin: 'LinkedIn', gmail: 'Gmail', salesforce: 'Salesforce', hubspot: 'HubSpot', instagram: 'Instagram', facebook: 'Facebook', x: 'X', other: null };
+    const labels = { linkedin: 'LinkedIn', gmail: 'Gmail', salesforce: 'Salesforce', hubspot: 'HubSpot', instagram: 'Instagram', facebook: 'Facebook', x: 'X', revio: 'Revio', other: null };
     return labels[p];
   }
 
@@ -98,7 +99,7 @@
         default: scraped = scrapeGeneric(); break;
       }
     } catch (e) {
-      console.log('[HackExt] Scrape error, falling back to generic:', e.message);
+      console.log('[Pitho] Scrape error, falling back to generic:', e.message);
       scraped = scrapeGeneric();
     }
 
@@ -327,6 +328,135 @@
     };
   }
 
+  // =============================================
+  // REVIO API — Fetch conversations via API
+  // =============================================
+
+  const REVIO_BASE = 'https://app.sbccrm.com/bld/api';
+
+  function getRevioToken() {
+    const match = document.cookie.split(';').find(c => c.trim().startsWith('token='));
+    return match ? match.split('=').slice(1).join('=') : null;
+  }
+
+  function getRevioXsrf() {
+    const match = document.cookie.split(';').find(c => c.trim().startsWith('XSRF-TOKEN='));
+    return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : null;
+  }
+
+  function revioHeaders() {
+    const token = getRevioToken();
+    if (!token) return null;
+    const headers = {
+      'Authorization': 'Bearer ' + token,
+      'Accept': 'application/json',
+    };
+    const xsrf = getRevioXsrf();
+    if (xsrf) headers['X-XSRF-TOKEN'] = xsrf;
+    return headers;
+  }
+
+  function getRevioContactId() {
+    const match = window.location.pathname.match(/\/inbox\/([a-f0-9]{24})/);
+    return match ? match[1] : null;
+  }
+
+  async function fetchRevioContact(contactId) {
+    const headers = revioHeaders();
+    if (!headers) return null;
+    try {
+      const resp = await fetch(REVIO_BASE + '/contacts/' + contactId, { headers });
+      if (!resp.ok) return null;
+      return await resp.json();
+    } catch (e) {
+      console.log('[Pitho] Revio contact fetch error:', e.message);
+      return null;
+    }
+  }
+
+  async function fetchRevioMessages(contactId, maxPages) {
+    maxPages = maxPages || 10;
+    const headers = revioHeaders();
+    if (!headers) return [];
+    const allMessages = [];
+    try {
+      for (let page = 1; page <= maxPages; page++) {
+        const resp = await fetch(REVIO_BASE + '/messages/' + contactId + '?page=' + page, { headers });
+        if (!resp.ok) break;
+        const data = await resp.json();
+        if (!data.data || data.data.length === 0) break;
+        allMessages.push.apply(allMessages, data.data);
+      }
+    } catch (e) {
+      console.log('[Pitho] Revio messages fetch error:', e.message);
+    }
+    allMessages.sort(function(a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+    return allMessages;
+  }
+
+  let _revioCache = { contactId: null, data: null, ts: 0 };
+  const REVIO_CACHE_TTL = 10000;
+
+  async function scrapeRevioAsync() {
+    const contactId = getRevioContactId();
+    if (!contactId) return scrapeGeneric();
+
+    if (_revioCache.contactId === contactId && Date.now() - _revioCache.ts < REVIO_CACHE_TTL) {
+      console.log('[Pitho] Using cached Revio data for', contactId);
+      return _revioCache.data;
+    }
+
+    console.log('[Pitho] Fetching Revio data for contact:', contactId);
+
+    const contact = await fetchRevioContact(contactId);
+    const rawMessages = await fetchRevioMessages(contactId);
+
+    const messages = rawMessages
+      .filter(function(m) { return m.message_type === 'text' && m.text && m.timestamp && m.direction; })
+      .map(function(m) {
+        return {
+          text: m.text,
+          direction: m.direction,
+          timestamp: m.timestamp,
+          channel: m.channel || 'sms'
+        };
+      });
+
+    if (messages.length === 0) {
+      console.log('[Pitho] No Revio messages found, falling back to generic scraper');
+      return scrapeGeneric();
+    }
+
+    // Build conversation text with clear labels
+    const contactName = contact ? (contact.full_name || contact.name || '') : '';
+    const thread = messages.map(function(m) {
+      const sender = m.direction === 'received' ? (contactName || 'PROSPECT') : 'REP';
+      const time = new Date(m.timestamp).toLocaleString();
+      return sender + ' [' + time + ']: ' + m.text;
+    });
+
+    console.log('[Pitho] Revio API scraped', messages.length, 'messages for', contactName);
+
+    const result = {
+      type: 'dm_thread',
+      contactName: contactName,
+      contactId: contactId,
+      conversation: thread.join('\n\n'),
+      messageCount: messages.length,
+      messages: messages,
+      contactDetails: contact ? {
+        stage: contact.stage || '',
+        score: contact.rocket_selling_score || null,
+        currentBox: contact.rocket_selling_current_box || null,
+        channel: contact.channel || null,
+        tags: contact.tags || [],
+        notes: contact.ai_notes || ''
+      } : null
+    };
+    _revioCache = { contactId: contactId, data: result, ts: Date.now() };
+    return result;
+  }
+
   // --- Send to service worker ---
 
   function sendToBackground(text, replyMode, fullPageData) {
@@ -346,11 +476,11 @@
         fullPage: fullPageData || null
       };
 
-      console.log('[HackExt] Sending to background:', msg.type, msg.platform, msg.replyMode, fullPageData ? '(full page)' : '(selection)');
+      console.log('[Pitho] Sending to background:', msg.type, msg.platform, msg.replyMode, fullPageData ? '(full page)' : '(selection)');
 
       chrome.runtime.sendMessage(msg, (response) => {
         if (chrome.runtime.lastError) {
-          console.error('[HackExt] lastError:', chrome.runtime.lastError.message);
+          console.error('[Pitho] lastError:', chrome.runtime.lastError.message);
           reject(new Error(chrome.runtime.lastError.message));
           return;
         }
@@ -374,7 +504,7 @@
   function createFloatingBtn(x, y) {
     removeFloatingBtn();
     floatingBtn = document.createElement('div');
-    floatingBtn.id = 'hackext-float-btn';
+    floatingBtn.id = 'chatripper-float-btn';
 
     // Clamp position so it stays on screen (bar is ~560px wide with 4 buttons)
     const barWidth = 560;
@@ -387,22 +517,22 @@
     floatingBtn.style.top = clampedY + 'px';
 
     floatingBtn.innerHTML = `
-      <div class="hackext-float-option" data-action="reply">
+      <div class="chatripper-float-option" data-action="reply">
         <img src="${logoURL}" width="16" height="16" style="border-radius:3px;">
         <span>Reply</span>
       </div>
-      <div class="hackext-float-divider"></div>
-      <div class="hackext-float-option" data-action="analyze">
+      <div class="chatripper-float-divider"></div>
+      <div class="chatripper-float-option" data-action="analyze">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <span>Analyze & Reply</span>
       </div>
-      <div class="hackext-float-divider"></div>
-      <div class="hackext-float-option" data-action="analyze-chat">
+      <div class="chatripper-float-divider"></div>
+      <div class="chatripper-float-option" data-action="analyze-chat">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         <span>Analyze & Chat</span>
       </div>
-      <div class="hackext-float-divider"></div>
-      <div class="hackext-float-option" data-action="analyze-score">
+      <div class="chatripper-float-divider"></div>
+      <div class="chatripper-float-option" data-action="analyze-score">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
         <span>Analyze & Score</span>
       </div>`;
@@ -458,7 +588,7 @@
       const r = rects[i];
       if (r.width < 2 || r.height < 2) continue;
       const overlay = document.createElement('div');
-      overlay.className = 'hackext-highlight-overlay';
+      overlay.className = 'chatripper-highlight-overlay';
       overlay.style.position = 'absolute';
       overlay.style.left = (r.left + window.scrollX) + 'px';
       overlay.style.top = (r.top + window.scrollY) + 'px';
@@ -480,17 +610,17 @@
   function createLoaderPill(x, y) {
     removeLoader();
     loaderPill = document.createElement('div');
-    loaderPill.id = 'hackext-loader-pill';
+    loaderPill.id = 'chatripper-loader-pill';
 
     const shuffled = getShuffledStatus();
     const platform = getPlatformLabel();
-    const platformTag = platform ? `<span class="hackext-pill-platform">${platform}</span>` : '';
-    const modeTag = currentInputMode === 'analyze' ? `<span class="hackext-pill-mode">Full Page</span>` : '';
+    const platformTag = platform ? `<span class="chatripper-pill-platform">${platform}</span>` : '';
+    const modeTag = currentInputMode === 'analyze' ? `<span class="chatripper-pill-mode">Full Page</span>` : '';
 
     loaderPill.innerHTML = `
-      <div class="hackext-pill-inner">
-        <img class="hackext-pill-gif" src="${loaderGifURL}" alt="">
-        <span class="hackext-pill-text">${shuffled[0]}</span>
+      <div class="chatripper-pill-inner">
+        <img class="chatripper-pill-gif" src="${loaderGifURL}" alt="">
+        <span class="chatripper-pill-text">${shuffled[0]}</span>
         ${platformTag}${modeTag}
       </div>`;
 
@@ -499,7 +629,7 @@
     document.body.appendChild(loaderPill);
 
     let idx = 0;
-    const textEl = loaderPill.querySelector('.hackext-pill-text');
+    const textEl = loaderPill.querySelector('.chatripper-pill-text');
     statusInterval = setInterval(() => {
       idx = (idx + 1) % shuffled.length;
       if (textEl) {
@@ -524,49 +654,49 @@
   function createReplyPanel(x, y) {
     removeReplyPanel();
     replyPanel = document.createElement('div');
-    replyPanel.id = 'hackext-reply-panel';
+    replyPanel.id = 'chatripper-reply-panel';
 
     const platform = getPlatformLabel();
-    const platformTag = platform ? `<span class="hackext-header-platform">${platform}</span>` : '';
+    const platformTag = platform ? `<span class="chatripper-header-platform">${platform}</span>` : '';
 
     replyPanel.innerHTML = `
-      <div class="hackext-panel-header">
-        <div class="hackext-panel-title"><img class="hackext-logo" src="${logoURL}" alt="C"> HackExt ${platformTag}</div>
-        <div class="hackext-header-actions">
-          <button class="hackext-analyze-btn" title="Analyze full page"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
-          <button class="hackext-expand-btn" title="Open in side panel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
-          <button class="hackext-panel-close" title="Close">&times;</button>
+      <div class="chatripper-panel-header">
+        <div class="chatripper-panel-title"><img class="chatripper-logo" src="${logoURL}" alt="C"> Pitho ${platformTag}</div>
+        <div class="chatripper-header-actions">
+          <button class="chatripper-analyze-btn" title="Analyze full page"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
+          <button class="chatripper-expand-btn" title="Open in side panel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>
+          <button class="chatripper-panel-close" title="Close">&times;</button>
         </div>
       </div>
-      <div class="hackext-mode-bar">
-        <button class="hackext-mode-btn${currentReplyMode === 'auto' ? ' active' : ''}" data-mode="auto">Auto</button>
-        <button class="hackext-mode-btn${currentReplyMode === 'objection' ? ' active' : ''}" data-mode="objection">Objection</button>
-        <button class="hackext-mode-btn${currentReplyMode === 'follow_up' ? ' active' : ''}" data-mode="follow_up">Follow Up</button>
-        <button class="hackext-mode-btn${currentReplyMode === 'close' ? ' active' : ''}" data-mode="close">Close</button>
-        <button class="hackext-mode-btn${currentReplyMode === 're_engage' ? ' active' : ''}" data-mode="re_engage">Re-engage</button>
+      <div class="chatripper-mode-bar">
+        <button class="chatripper-mode-btn${currentReplyMode === 'auto' ? ' active' : ''}" data-mode="auto">Auto</button>
+        <button class="chatripper-mode-btn${currentReplyMode === 'objection' ? ' active' : ''}" data-mode="objection">Objection</button>
+        <button class="chatripper-mode-btn${currentReplyMode === 'follow_up' ? ' active' : ''}" data-mode="follow_up">Follow Up</button>
+        <button class="chatripper-mode-btn${currentReplyMode === 'close' ? ' active' : ''}" data-mode="close">Close</button>
+        <button class="chatripper-mode-btn${currentReplyMode === 're_engage' ? ' active' : ''}" data-mode="re_engage">Re-engage</button>
       </div>
-      <div class="hackext-panel-body"></div>`;
+      <div class="chatripper-panel-body"></div>`;
 
     const vw = window.innerWidth, vh = window.innerHeight;
     replyPanel.style.left = Math.max(10, Math.min(x, vw - 380)) + 'px';
     replyPanel.style.top = Math.max(10, Math.min(y + 10, vh - 350)) + 'px';
 
-    makeDraggable(replyPanel, replyPanel.querySelector('.hackext-panel-header'));
-    replyPanel.querySelector('.hackext-panel-close').addEventListener('click', removeReplyPanel);
-    replyPanel.querySelector('.hackext-expand-btn').addEventListener('click', () => {
+    makeDraggable(replyPanel, replyPanel.querySelector('.chatripper-panel-header'));
+    replyPanel.querySelector('.chatripper-panel-close').addEventListener('click', removeReplyPanel);
+    replyPanel.querySelector('.chatripper-expand-btn').addEventListener('click', () => {
       chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' });
     });
-    replyPanel.querySelector('.hackext-analyze-btn').addEventListener('click', () => {
+    replyPanel.querySelector('.chatripper-analyze-btn').addEventListener('click', () => {
       currentInputMode = 'analyze';
       const rect = replyPanel.getBoundingClientRect();
       removeReplyPanel();
       requestAnalyzeReply(rect.left, rect.top);
     });
-    replyPanel.querySelectorAll('.hackext-mode-btn').forEach(btn => {
+    replyPanel.querySelectorAll('.chatripper-mode-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const mode = btn.dataset.mode;
         if (mode === currentReplyMode) return;
-        replyPanel.querySelectorAll('.hackext-mode-btn').forEach(b => b.classList.remove('active'));
+        replyPanel.querySelectorAll('.chatripper-mode-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentReplyMode = mode;
         const rect = replyPanel.getBoundingClientRect();
@@ -587,7 +717,7 @@
     let sx = 0, sy = 0, dragging = false;
     handle.style.cursor = 'grab';
     handle.addEventListener('mousedown', e => {
-      if (e.target.closest('.hackext-panel-close') || e.target.closest('.hackext-expand-btn') || e.target.closest('.hackext-analyze-btn')) return;
+      if (e.target.closest('.chatripper-panel-close') || e.target.closest('.chatripper-expand-btn') || e.target.closest('.chatripper-analyze-btn')) return;
       dragging = true;
       sx = e.clientX;
       sy = e.clientY;
@@ -623,14 +753,42 @@
   }
 
   document.addEventListener('focusin', (e) => {
-    if (e.target.closest('#hackext-reply-panel') || e.target.closest('#hackext-float-btn')) return;
+    if (e.target.closest('#chatripper-reply-panel') || e.target.closest('#chatripper-float-btn')) return;
     if (isInputElement(e.target)) {
       lastFocusedInput = e.target;
     }
   }, true);
 
-  function insertIntoInput(text) {
-    const el = lastFocusedInput;
+  // Try to find the main chat input on the page
+  function findChatInput() {
+    // 1. Check lastFocusedInput first
+    if (lastFocusedInput && document.body.contains(lastFocusedInput)) return lastFocusedInput;
+
+    // 2. Common chat textareas (by placeholder or role)
+    const selectors = [
+      'textarea[placeholder*="type a message" i]',
+      'textarea[placeholder*="press R" i]',
+      'textarea[placeholder*="write a message" i]',
+      'textarea[placeholder*="send a message" i]',
+      'div[contenteditable="true"][role="textbox"]',
+      'div[contenteditable="true"][data-placeholder]',
+      'div.msg-form__contenteditable[contenteditable="true"]',      // LinkedIn
+      'div[aria-label*="message" i][contenteditable="true"]',       // Gmail / generic
+      'p.selectable-text[contenteditable]',                          // WhatsApp Web
+      'textarea.custom-scrollbar',                                   // SBC / Revio style
+      'div[role="textbox"][contenteditable="true"]',
+      'textarea'                                                     // last resort: any textarea
+    ];
+
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el && el.offsetParent !== null) return el;
+    }
+    return null;
+  }
+
+  function insertIntoInput(text, replace) {
+    const el = findChatInput();
     if (!el) return false;
 
     // Focus the element first
@@ -640,12 +798,19 @@
 
     // For textarea / input
     if (tag === 'textarea' || tag === 'input') {
-      const start = el.selectionStart || 0;
-      const end = el.selectionEnd || 0;
-      const before = el.value.substring(0, start);
-      const after = el.value.substring(end);
-      el.value = before + text + after;
-      el.selectionStart = el.selectionEnd = start + text.length;
+      if (replace) {
+        // Replace entire content (used by hotkey cycling)
+        el.value = text;
+        el.selectionStart = el.selectionEnd = text.length;
+      } else {
+        // Insert at cursor (used by manual Insert button click)
+        const start = el.selectionStart || 0;
+        const end = el.selectionEnd || 0;
+        const before = el.value.substring(0, start);
+        const after = el.value.substring(end);
+        el.value = before + text + after;
+        el.selectionStart = el.selectionEnd = start + text.length;
+      }
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
@@ -679,7 +844,7 @@
 
   function showReply(response) {
     if (!replyPanel) return;
-    const body = replyPanel.querySelector('.hackext-panel-body');
+    const body = replyPanel.querySelector('.chatripper-panel-body');
     let messages, analysis = null, reasoning = null;
 
     if (response.structured && response.messages) {
@@ -697,36 +862,36 @@
 
     let html = '';
     if (analysis) {
-      html += `<div class="hackext-analysis">
-        <div class="hackext-analysis-row"><span class="hackext-analysis-label">Stage</span><span class="hackext-analysis-value">${esc(analysis.stage || '')}</span></div>
-        <div class="hackext-analysis-row"><span class="hackext-analysis-label">Energy</span><span class="hackext-analysis-value">${esc(analysis.energy || '')}</span></div>
-        <div class="hackext-analysis-row"><span class="hackext-analysis-label">Read</span><span class="hackext-analysis-value">${esc(analysis.realMeaning || '')}</span></div>
+      html += `<div class="chatripper-analysis">
+        <div class="chatripper-analysis-row"><span class="chatripper-analysis-label">Stage</span><span class="chatripper-analysis-value">${esc(analysis.stage || '')}</span></div>
+        <div class="chatripper-analysis-row"><span class="chatripper-analysis-label">Energy</span><span class="chatripper-analysis-value">${esc(analysis.energy || '')}</span></div>
+        <div class="chatripper-analysis-row"><span class="chatripper-analysis-label">Read</span><span class="chatripper-analysis-value">${esc(analysis.realMeaning || '')}</span></div>
       </div>`;
     }
-    html += '<div class="hackext-messages">';
+    html += '<div class="chatripper-messages">';
     messages.forEach((msg, i) => {
-      html += `<div class="hackext-message-block">
-        <div class="hackext-message-label">Message ${i + 1}</div>
-        <div class="hackext-message-text">${esc(msg)}</div>
-        <div class="hackext-message-actions">
-          <button class="hackext-copy-btn" data-idx="${i}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
-          <button class="hackext-insert-btn" data-idx="${i}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg> Insert</button>
+      html += `<div class="chatripper-message-block">
+        <div class="chatripper-message-label">Message ${i + 1}</div>
+        <div class="chatripper-message-text">${esc(msg)}</div>
+        <div class="chatripper-message-actions">
+          <button class="chatripper-copy-btn" data-idx="${i}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button>
+          <button class="chatripper-insert-btn" data-idx="${i}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg> Insert</button>
         </div>
       </div>`;
     });
-    html += `<div class="hackext-bottom-actions">
-      <button class="hackext-copy-all-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy All</button>
-      <button class="hackext-insert-all-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg> Insert All</button>
+    html += `<div class="chatripper-bottom-actions">
+      <button class="chatripper-copy-all-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy All</button>
+      <button class="chatripper-insert-all-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg> Insert All</button>
     </div></div>`;
     if (reasoning) {
-      html += `<div class="hackext-reasoning"><div class="hackext-reasoning-label">Why this works</div><div class="hackext-reasoning-text">${esc(reasoning)}</div></div>`;
+      html += `<div class="chatripper-reasoning"><div class="chatripper-reasoning-label">Why this works</div><div class="chatripper-reasoning-text">${esc(reasoning)}</div></div>`;
     }
     body.innerHTML = html;
 
     const copyIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
     const insertIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>';
 
-    body.querySelectorAll('.hackext-copy-btn').forEach(btn => {
+    body.querySelectorAll('.chatripper-copy-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         navigator.clipboard.writeText(messages[parseInt(btn.dataset.idx)]).then(() => {
           btn.textContent = 'Copied!'; btn.style.color = '#22c55e';
@@ -735,7 +900,7 @@
       });
     });
 
-    body.querySelectorAll('.hackext-insert-btn').forEach(btn => {
+    body.querySelectorAll('.chatripper-insert-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const ok = insertIntoInput(messages[parseInt(btn.dataset.idx)]);
         if (ok) {
@@ -748,7 +913,7 @@
       });
     });
 
-    const cab = body.querySelector('.hackext-copy-all-btn');
+    const cab = body.querySelector('.chatripper-copy-all-btn');
     if (cab) cab.addEventListener('click', () => {
       navigator.clipboard.writeText(messages.join('\n\n')).then(() => {
         cab.textContent = 'Copied all!'; cab.style.color = '#22c55e';
@@ -756,7 +921,7 @@
       });
     });
 
-    const iab = body.querySelector('.hackext-insert-all-btn');
+    const iab = body.querySelector('.chatripper-insert-all-btn');
     if (iab) iab.addEventListener('click', () => {
       const ok = insertIntoInput(messages.join('\n\n'));
       if (ok) {
@@ -771,9 +936,9 @@
 
   function showError(msg) {
     if (!replyPanel) return;
-    const body = replyPanel.querySelector('.hackext-panel-body');
-    body.innerHTML = `<div class="hackext-error"><span>Something went wrong</span><p>${esc(msg)}</p><button class="hackext-retry-btn">Try Again</button></div>`;
-    body.querySelector('.hackext-retry-btn').addEventListener('click', () => {
+    const body = replyPanel.querySelector('.chatripper-panel-body');
+    body.innerHTML = `<div class="chatripper-error"><span>Something went wrong</span><p>${esc(msg)}</p><button class="chatripper-retry-btn">Try Again</button></div>`;
+    body.querySelector('.chatripper-retry-btn').addEventListener('click', () => {
       if (currentInputMode === 'analyze') requestAnalyzeReply();
       else requestReply(currentSelection, currentReplyMode);
     });
@@ -800,36 +965,77 @@
   }
 
   function doRequest(text, replyMode, savedX, savedY) {
+    const platform = detectPlatform();
+    const x = savedX || 100;
+    const y = savedY || 100;
+
+    if (platform === 'revio') {
+      scrapeRevioAsync().then(function(scraped) {
+        sendToBackground(text, replyMode, scraped)
+          .then(result => handleResult(result, x, y))
+          .catch(err => handleError(err, x, y));
+      }).catch(function() {
+        // Fallback to plain text if Revio fetch fails
+        sendToBackground(text, replyMode)
+          .then(result => handleResult(result, x, y))
+          .catch(err => handleError(err, x, y));
+      });
+      return;
+    }
+
     sendToBackground(text, replyMode)
       .then(result => {
-        console.log('[HackExt] Success:', result.structured ? 'structured' : 'plain');
-        // Use saved position — selection is often lost by the time response arrives
-        handleResult(result, savedX || 100, savedY || 100);
+        console.log('[Pitho] Success:', result.structured ? 'structured' : 'plain');
+        handleResult(result, x, y);
       })
       .catch(err => {
-        console.error('[HackExt] Failed:', err.message);
-        handleError(err, savedX || 100, savedY || 100);
+        console.error('[Pitho] Failed:', err.message);
+        handleError(err, x, y);
       });
   }
 
   function doAnalyzeRequest(replyMode) {
-    const scraped = scrapePageContent();
-    console.log('[HackExt] Scraped page:', scraped.type, 'messages:', scraped.messageCount);
+    const platform = detectPlatform();
+    const x = window.innerWidth / 2 - 190;
+    const y = 80;
 
-    // Include highlighted text so the agent knows what the rep is focused on
+    if (platform === 'revio') {
+      scrapeRevioAsync().then(function(scraped) {
+        console.log('[Pitho] Revio analyze scraped:', scraped.type, 'messages:', scraped.messageCount);
+        if (currentSelection && currentSelection.length > 5) {
+          scraped.highlightedText = currentSelection;
+        }
+        sendToBackground(scraped.conversation, replyMode || 'auto', scraped)
+          .then(result => handleResult(result, x, y))
+          .catch(err => handleError(err, x, y));
+      }).catch(function() {
+        // Fallback to generic scraper
+        const scraped = scrapePageContent();
+        if (currentSelection && currentSelection.length > 5) {
+          scraped.highlightedText = currentSelection;
+        }
+        sendToBackground(scraped.conversation, replyMode || 'auto', scraped)
+          .then(result => handleResult(result, x, y))
+          .catch(err => handleError(err, x, y));
+      });
+      return;
+    }
+
+    const scraped = scrapePageContent();
+    console.log('[Pitho] Scraped page:', scraped.type, 'messages:', scraped.messageCount);
+
     if (currentSelection && currentSelection.length > 5) {
       scraped.highlightedText = currentSelection;
     }
 
     sendToBackground(scraped.conversation, replyMode || 'auto', scraped)
       .then(result => {
-        console.log('[HackExt] Analyze success:', result.structured ? 'structured' : 'plain');
-        const vw = window.innerWidth;
-        handleResult(result, vw / 2 - 190, 80);
+        console.log('[Pitho] Analyze success:', result.structured ? 'structured' : 'plain');
+        handleResult(result, x, y);
       })
       .catch(err => {
-        console.error('[HackExt] Analyze failed:', err.message);
-        handleError(err, window.innerWidth / 2 - 190, 80);
+        console.error('[Pitho] Analyze failed:', err.message);
+        handleError(err, x, y);
       });
   }
 
@@ -875,7 +1081,7 @@
 
     // Scrape the page using existing scrapers
     const scraped = scrapePageContent();
-    console.log('[HackExt] Analyze & Chat scraped:', scraped.type, 'messages:', scraped.messageCount);
+    console.log('[Pitho] Analyze & Chat scraped:', scraped.type, 'messages:', scraped.messageCount);
 
     // Include highlighted text
     if (currentSelection && currentSelection.length > 5) {
@@ -892,7 +1098,7 @@
       selectedText: currentSelection || ''
     }, (response) => {
       if (chrome.runtime.lastError) {
-        console.error('[HackExt] Analyze & Chat error:', chrome.runtime.lastError.message);
+        console.error('[Pitho] Analyze & Chat error:', chrome.runtime.lastError.message);
       }
     });
   }
@@ -902,7 +1108,7 @@
     removeReplyPanel();
 
     const scraped = scrapePageContent();
-    console.log('[HackExt] Analyze & Score scraped:', scraped.type, 'messages:', scraped.messageCount);
+    console.log('[Pitho] Analyze & Score scraped:', scraped.type, 'messages:', scraped.messageCount);
 
     if (currentSelection && currentSelection.length > 5) {
       scraped.highlightedText = currentSelection;
@@ -917,34 +1123,81 @@
       selectedText: currentSelection || ''
     }, (response) => {
       if (chrome.runtime.lastError) {
-        console.error('[HackExt] Analyze & Score error:', chrome.runtime.lastError.message);
+        console.error('[Pitho] Analyze & Score error:', chrome.runtime.lastError.message);
       }
     });
   }
 
-  // --- Selection listener ---
+  // --- Selection listener (floating button disabled — side panel auto-analyzes) ---
 
   document.addEventListener('mouseup', (e) => {
     if (!enabled) return;
-    if (e.target.closest('#hackext-float-btn') || e.target.closest('#hackext-reply-panel') || e.target.closest('#hackext-loader-pill')) return;
+    if (e.target.closest('#chatripper-reply-panel') || e.target.closest('#chatripper-loader-pill')) return;
     setTimeout(() => {
       const sel = window.getSelection();
       const text = sel?.toString().trim();
       if (text && text.length > 10) {
         currentSelection = text;
-        const rect = sel.getRangeAt(0).getBoundingClientRect();
-        createFloatingBtn(rect.left + (rect.width / 2) - 280, rect.bottom);
-      } else if (!e.target.closest('#hackext-reply-panel')) {
-        removeFloatingBtn();
       }
     }, 10);
   });
 
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'CONTEXT_MENU_REPLY') {
       currentSelection = message.text;
       currentInputMode = 'select';
       requestReply(message.text, 'auto');
+    }
+
+    // Side panel asks us to insert text into the page input
+    if (message.type === 'INSERT_TEXT') {
+      const ok = insertIntoInput(message.text, message.replace);
+      sendResponse({ success: ok });
+      return true;
+    }
+
+    // Side panel asks us to scrape the current page
+    if (message.type === 'SCRAPE_PAGE') {
+      const platform = detectPlatform();
+
+      // Revio uses async API calls — handle separately
+      if (platform === 'revio') {
+        scrapeRevioAsync().then(function(scraped) {
+          sendResponse({
+            success: true,
+            data: scraped,
+            platform: 'revio',
+            pageUrl: window.location.href,
+            pageTitle: document.title,
+            selectedText: currentSelection || ''
+          });
+        }).catch(function(err) {
+          console.error('[Pitho] Revio scrape error:', err);
+          // Fallback to generic scraper
+          const scraped = scrapeGeneric();
+          sendResponse({
+            success: true,
+            data: scraped,
+            platform: 'revio',
+            pageUrl: window.location.href,
+            pageTitle: document.title,
+            selectedText: currentSelection || ''
+          });
+        });
+        return true; // Keep sendResponse channel open for async
+      }
+
+      // All other platforms — synchronous scraping
+      const scraped = scrapePageContent();
+      sendResponse({
+        success: true,
+        data: scraped,
+        platform: platform,
+        pageUrl: window.location.href,
+        pageTitle: document.title,
+        selectedText: currentSelection || ''
+      });
+      return true;
     }
   });
 

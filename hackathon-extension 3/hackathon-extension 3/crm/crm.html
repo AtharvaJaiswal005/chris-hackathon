@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="crm.css">
+  <title>Pitho.ai — CRM</title>
+</head>
+<body>
+  <div class="crm">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <img src="../icons/pitho-logo.png" alt="Pitho.ai" class="sidebar-logo">
+        <div class="sidebar-brand-text">
+          <span class="brand-name">Pitho<span class="brand-dot">.ai</span></span>
+          <span class="brand-sub">Sales CRM</span>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <a class="nav-item active" data-view="leads">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Leads
+        </a>
+        <a class="nav-item" data-view="pipeline">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Pipeline
+        </a>
+        <a class="nav-item" data-view="settings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-pill">
+          <div class="user-avatar">A</div>
+          <span>Athar J.</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1 id="viewTitle">Leads</h1>
+          <span class="lead-count" id="leadCount">12 contacts</span>
+        </div>
+        <div class="topbar-right">
+          <div class="search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Search leads..." id="searchInput">
+          </div>
+          <button class="btn-primary" id="addLeadBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Lead
+          </button>
+        </div>
+      </header>
+
+      <!-- Leads View -->
+      <div class="view active" id="leadsView">
+        <!-- Stats Cards -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-value" id="statTotal">12</div>
+            <div class="stat-label">Total Leads</div>
+          </div>
+          <div class="stat-card stat-hot">
+            <div class="stat-value" id="statHot">3</div>
+            <div class="stat-label">Hot</div>
+          </div>
+          <div class="stat-card stat-warm">
+            <div class="stat-value" id="statWarm">5</div>
+            <div class="stat-label">Warm</div>
+          </div>
+          <div class="stat-card stat-cold">
+            <div class="stat-value" id="statCold">4</div>
+            <div class="stat-label">Cold</div>
+          </div>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="filter-row">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="hot">Hot</button>
+          <button class="filter-btn" data-filter="warm">Warm</button>
+          <button class="filter-btn" data-filter="cold">Cold</button>
+          <div class="filter-spacer"></div>
+          <select class="platform-filter" id="platformFilter">
+            <option value="all">All Platforms</option>
+            <option value="linkedin">LinkedIn</option>
+            <option value="gmail">Gmail</option>
+            <option value="instagram">Instagram</option>
+          </select>
+        </div>
+
+        <!-- Leads Table -->
+        <div class="table-wrap">
+          <table class="leads-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Platform</th>
+                <th>Tag</th>
+                <th>Last Message</th>
+                <th>Score</th>
+                <th>Last Active</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="leadsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Pipeline View -->
+      <div class="view" id="pipelineView">
+        <div class="pipeline">
+          <div class="pipeline-col">
+            <div class="pipeline-header cold-header">Cold <span class="pipeline-count" id="pipeCold">0</span></div>
+            <div class="pipeline-cards" id="pipeColdCards"></div>
+          </div>
+          <div class="pipeline-col">
+            <div class="pipeline-header warm-header">Warm <span class="pipeline-count" id="pipeWarm">0</span></div>
+            <div class="pipeline-cards" id="pipeWarmCards"></div>
+          </div>
+          <div class="pipeline-col">
+            <div class="pipeline-header hot-header">Hot <span class="pipeline-count" id="pipeHot">0</span></div>
+            <div class="pipeline-cards" id="pipeHotCards"></div>
+          </div>
+          <div class="pipeline-col">
+            <div class="pipeline-header closed-header">Closed <span class="pipeline-count" id="pipeClosed">0</span></div>
+            <div class="pipeline-cards" id="pipeClosedCards"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings View -->
+      <div class="view" id="settingsView">
+        <div class="settings-card">
+          <h2>Service Context</h2>
+          <p class="settings-desc">Describe your services so Pitho.ai can tailor replies for your business.</p>
+          <textarea class="settings-textarea" id="serviceContext" rows="6" placeholder="e.g. We sell a $5K high-ticket coaching program for B2B founders. Our main offer is a 12-week accelerator..."></textarea>
+          <button class="btn-primary" id="saveContext">Save Context</button>
+        </div>
+        <div class="settings-card">
+          <h2>Auto-Tag Rules</h2>
+          <p class="settings-desc">Configure when leads get auto-tagged based on conversation signals.</p>
+          <div class="rule-row">
+            <span class="rule-label">Tag as <span class="tag tag-hot">Hot</span> when:</span>
+            <input class="rule-input" value="asks about pricing, wants to book a call" disabled>
+          </div>
+          <div class="rule-row">
+            <span class="rule-label">Tag as <span class="tag tag-warm">Warm</span> when:</span>
+            <input class="rule-input" value="shows interest, asks questions, engages" disabled>
+          </div>
+          <div class="rule-row">
+            <span class="rule-label">Tag as <span class="tag tag-cold">Cold</span> when:</span>
+            <input class="rule-input" value="no response, not interested, unsubscribed" disabled>
+          </div>
+          <p class="settings-hint">Auto-tagging coming soon — Pitho.ai will analyze conversations and tag leads automatically.</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add Lead Modal -->
+  <div class="modal-overlay" id="addLeadModal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Add Lead</h2>
+        <button class="modal-close" id="closeModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label>Name</label>
+        <input type="text" id="newLeadName" placeholder="John Smith">
+        <label>Platform</label>
+        <select id="newLeadPlatform">
+          <option value="linkedin">LinkedIn</option>
+          <option value="gmail">Gmail</option>
+          <option value="instagram">Instagram</option>
+        </select>
+        <label>Tag</label>
+        <select id="newLeadTag">
+          <option value="warm">Warm</option>
+          <option value="hot">Hot</option>
+          <option value="cold">Cold</option>
+        </select>
+        <label>Notes</label>
+        <textarea id="newLeadNotes" rows="3" placeholder="Initial context..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="cancelModal">Cancel</button>
+        <button class="btn-primary" id="saveLead">Add Lead</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="crm.js"></script>
+</body>
+</html>

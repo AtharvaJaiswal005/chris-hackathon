@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "HackExt - AI Sales Coach",
+  "name": "Pitho.ai - Sales Coach",
   "version": "1.0.0",
-  "description": "AI-powered sales coaching right in your browser. Highlight any prospect message and get instant reply suggestions.",
+  "description": "AI-powered sales coaching right in your browser. Analyze conversations and get instant reply suggestions.",
   "permissions": ["storage", "activeTab", "contextMenus", "sidePanel"],
-  "host_permissions": ["https://rigchris.app.n8n.cloud/*"],
+  "host_permissions": ["https://rigchris.app.n8n.cloud/*", "https://backend-extention-production.up.railway.app/*", "https://app.sbccrm.com/*"],
   "background": {
     "service_worker": "background/service-worker.js"
   },
@@ -18,7 +18,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "loading.gif"],
+      "resources": ["icons/*", "loading.gif", "crm/*", "auth/*"],
       "matches": ["<all_urls>"]
     }
   ],
@@ -26,7 +26,6 @@
     "default_path": "sidepanel/sidepanel.html"
   },
   "action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -37,5 +36,14 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+  "commands": {
+    "insert-reply": {
+      "suggested_key": {
+        "default": "Alt+I",
+        "mac": "Alt+I"
+      },
+      "description": "Insert reply into chat input"
+    }
   }
 }

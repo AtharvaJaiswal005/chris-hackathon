@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="auth.css">
+  <title>Pitho.ai — Sign In</title>
+</head>
+<body>
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <img src="../icons/pitho-logo.png" alt="Pitho.ai" class="auth-logo">
+        <div class="auth-brand-text">
+          <span class="brand-name">Pitho<span class="brand-dot">.ai</span></span>
+          <span class="brand-sub">Sales Coach</span>
+        </div>
+      </div>
+
+      <!-- Step 1: Enter email -->
+      <form id="emailStep" class="auth-form">
+        <p class="auth-subtitle">Enter your email to sign in or create an account</p>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="otpEmail" placeholder="you@company.com" required autocomplete="email">
+        </div>
+        <div class="auth-error" id="emailError"></div>
+        <button type="submit" class="auth-btn" id="sendOtpBtn">Send Login Code</button>
+      </form>
+
+      <!-- Step 2: Enter OTP code -->
+      <form id="otpStep" class="auth-form" style="display:none">
+        <p class="auth-subtitle">We sent a 6-digit code to <strong id="otpEmailDisplay"></strong></p>
+        <div class="form-group">
+          <label>Verification Code</label>
+          <div class="otp-inputs" id="otpInputs">
+            <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" class="otp-digit" data-idx="0" autofocus>
+            <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" class="otp-digit" data-idx="1">
+            <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" class="otp-digit" data-idx="2">
+            <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" class="otp-digit" data-idx="3">
+            <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" class="otp-digit" data-idx="4">
+            <input type="text" maxlength="1" pattern="[0-9]" inputmode="numeric" class="otp-digit" data-idx="5">
+          </div>
+        </div>
+        <div class="auth-error" id="otpError"></div>
+        <button type="submit" class="auth-btn" id="verifyBtn">Verify & Sign In</button>
+        <div class="otp-actions">
+          <button type="button" class="otp-link" id="resendBtn">Resend code</button>
+          <span class="otp-sep">|</span>
+          <button type="button" class="otp-link" id="changeEmailBtn">Change email</button>
+        </div>
+      </form>
+
+      <div class="auth-footer">
+        <span>Powered by Pitho.ai</span>
+      </div>
+    </div>
+  </div>
+  <script src="auth.js"></script>
+</body>
+</html>
